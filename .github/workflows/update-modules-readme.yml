@@ -1,0 +1,40 @@
+name: Update modules README
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "modules/**/manifest.yaml"
+      - "scripts/generate_modules_readme.py"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Generate module list
+        run: python scripts/generate_modules_readme.py
+
+      - name: Commit README if it changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- README.md; then
+            echo "README.md unchanged — nothing to commit."
+          else
+            git add README.md
+            git commit -m "chore: atualiza lista de modulos no README (automatico)"
+            git push
+          fi

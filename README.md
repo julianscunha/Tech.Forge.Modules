@@ -60,13 +60,31 @@ estável pra sempre; a categoria é só um metadado de exibição.
 ## Módulos disponíveis
 
 Agrupados por categoria (a mesma que aparece na navegação do TechForge)
-— isso é só organização deste README, não da estrutura de pastas.
+e sempre **retraídos** — clique numa categoria pra expandir. Isso é
+proposital: com centenas ou milhares de módulos, uma tabela única
+tornaria este README impossível de navegar.
 
-### System
+Esta seção é **gerada automaticamente** por
+[`scripts/generate_modules_readme.py`](scripts/generate_modules_readme.py),
+rodado pelo GitHub Actions
+([`.github/workflows/update-modules-readme.yml`](.github/workflows/update-modules-readme.yml))
+toda vez que um `manifest.yaml` muda em `main`. **Não edite manualmente
+entre os marcadores abaixo** — a próxima execução do workflow sobrescreve.
+
+<!-- MODULES:START -->
+
+**1 módulo(s)** em **1 categoria(s)**. Clique numa categoria pra ver os módulos dentro dela.
+
+<details>
+<summary><strong>System</strong> — 1 módulo(s)</summary>
 
 | Módulo | O que faz |
 |---|---|
-| [`system_information_service`](modules/system_information_service) | Fornece informações do sistema operacional e do runtime (SO, CPU, versão do Python) |
+| [`system_information_service`](modules/system_information_service) | Fornece informações do sistema operacional e do runtime onde o TechForge está rodando. |
+
+</details>
+
+<!-- MODULES:END -->
 
 ## Como um módulo daqui chega até o TechForge?
 
