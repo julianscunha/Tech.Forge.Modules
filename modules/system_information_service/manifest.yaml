@@ -9,7 +9,7 @@ category: System
 module_type: service
 vendor: TechForge
 author: TechForge Team
-description: Fornece informações do sistema operacional e do runtime onde o TechForge está rodando.
+description: TODO
 
 # Navigation & Presentation — required
 icon: cpu
