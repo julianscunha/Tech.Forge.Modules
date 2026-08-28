@@ -17,12 +17,17 @@ on:
       - "modules/**"
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   validate:
     runs-on: ubuntu-latest
     env:
       PYTHONIOENCODING: utf-8
       PYTHONUTF8: "1"
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout Tech.Forge.Modules
         uses: actions/checkout@v4
@@ -47,6 +52,7 @@ jobs:
         run: pip install -r _core/core/backend/requirements.txt
 
       - name: Validar cada módulo do catálogo
+        id: validate_modules
         run: |
           set -e
           status=0
@@ -60,3 +66,20 @@ jobs:
             echo "::endgroup::"
           done
           exit $status
+
+      - name: Checagem extra de qualidade do manifest (description)
+        if: always()
+        run: python scripts/check_manifest_quality.py
+
+      - name: Comentar preview do README na PR
+        # Roda mesmo se a validação falhar (if: always()) — o contribuidor
+        # vê o que teria aparecido no README de qualquer forma, ajuda a
+        # diagnosticar. Só faz sentido em PR (workflow_dispatch não tem
+        # PR pra comentar).
+        if: always() && github.event_name == 'pull_request'
+        run: |
+          python scripts/preview_pr_modules.py > /tmp/preview.md
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --body-file /tmp/preview.md --edit-last || \
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --body-file /tmp/preview.md
