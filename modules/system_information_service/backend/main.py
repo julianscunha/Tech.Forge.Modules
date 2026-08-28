@@ -3,7 +3,7 @@ system_information_service — Backend Entry Point
 =====================================================
 Module    : system_information_service
 Name      : System Information Service
-Category  : Examples
+Category  : System
 Vendor    : TechForge
 Icon      : cpu
 Order     : 10
@@ -44,7 +44,7 @@ class SystemInformationServiceModule(ModuleContract):
             id="system_information_service",
             name="System Information Service",
             version="1.0.0",
-            category="Examples",
+            category="System",
             vendor="TechForge",
             author="TechForge Team",
             description="Fornece informações do sistema operacional e do runtime.",

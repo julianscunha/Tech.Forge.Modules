@@ -17,7 +17,7 @@ export const moduleConfig: ModulePageConfig = {
   moduleId:    "system_information_service",
   title:       "System Information Service",
   icon:        "cpu",
-  category:    "Examples",
+  category:    "System",
   vendor:      "TechForge",
   route:       "/modules/system_information_service",
   description: "Fornece informações do sistema operacional e do runtime.",

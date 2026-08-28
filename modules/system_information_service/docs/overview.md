@@ -6,7 +6,7 @@ tags: [system, info, cpu, runtime, example]
 
 # System Information Service
 
-**Category:** Examples
+**Category:** System
 **Vendor:** TechForge
 **Version:** 1.0.0
 **Icon:** cpu

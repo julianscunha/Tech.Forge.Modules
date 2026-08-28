@@ -1,9 +1,11 @@
 # System Information Service
 
-Módulo de exemplo para o [TechForge](https://github.com/julianscunha/Tech.Forge).
-Fornece informações do sistema operacional e do runtime onde o TechForge
-está executando — CPU, sistema operacional, hostname, versão do Python.
+Módulo funcional para o [TechForge](https://github.com/julianscunha/Tech.Forge).
+Fornece informações reais do sistema operacional e do runtime onde o
+TechForge está executando — CPU, sistema operacional, hostname, versão
+do Python.
 
+- **Categoria:** System
 - **Tipo:** Service Module (sem UI obrigatória)
 - **Dependências externas:** nenhuma (só biblioteca padrão do Python)
 - **Documentação completa:** [`docs/overview.md`](docs/overview.md)

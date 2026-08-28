@@ -50,11 +50,23 @@ Tech.Forge.Modules/
 Cada pasta dentro de `modules/` é um módulo completo e independente —
 pode ser instalado no TechForge sem afetar nenhum outro.
 
+A pasta **não** é organizada por categoria (`modules/<categoria>/<id>/`)
+de propósito: a categoria de um módulo já vive dentro do seu
+`manifest.yaml` e pode mudar ao longo do tempo — se ela também definisse
+o caminho da pasta, qualquer link de importação já distribuído quebraria
+quando isso acontecesse. O endereço de um módulo (`modules/<id>/`) é
+estável pra sempre; a categoria é só um metadado de exibição.
+
 ## Módulos disponíveis
+
+Agrupados por categoria (a mesma que aparece na navegação do TechForge)
+— isso é só organização deste README, não da estrutura de pastas.
+
+### System
 
 | Módulo | O que faz |
 |---|---|
-| [`system_information_service`](modules/system_information_service) | Fornece informações do sistema operacional e do runtime (exemplo de referência) |
+| [`system_information_service`](modules/system_information_service) | Fornece informações do sistema operacional e do runtime (SO, CPU, versão do Python) |
 
 ## Como um módulo daqui chega até o TechForge?
 
