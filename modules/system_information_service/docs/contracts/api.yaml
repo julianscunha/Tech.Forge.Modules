@@ -1,0 +1,38 @@
+service_id: system_information_service
+description: System Information Service — informações de SO, CPU e runtime.
+version: 1.0.0
+dependencies: []
+capabilities: [system.info.read, system.cpu.read, system.runtime.read]
+
+exports:
+  - name: get_system_info
+    description: Retorna informações gerais do sistema operacional e da máquina.
+    parameters: []
+    returns:
+      type: SystemInfo
+    examples:
+      - "result = await get_system_info()"
+
+  - name: get_cpu_info
+    description: Retorna a contagem de núcleos lógicos de CPU.
+    parameters: []
+    returns:
+      type: CpuInfo
+    examples:
+      - "result = await get_cpu_info()"
+
+  - name: get_runtime_info
+    description: Retorna informações do runtime Python que executa o Core.
+    parameters: []
+    returns:
+      type: RuntimeInfo
+    examples:
+      - "result = await get_runtime_info()"
+
+  - name: ping
+    description: Health check endpoint.
+    parameters: []
+    returns:
+      type: PingResult
+    examples:
+      - "GET /api/v1/modules/system_information_service/ping"
