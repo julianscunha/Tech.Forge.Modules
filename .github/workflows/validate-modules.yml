@@ -40,6 +40,12 @@ jobs:
       - name: Instalar techforge CLI
         run: pip install -e _core/cli
 
+      - name: Instalar dependências do Core
+        # A CLI importa app.module_engine.* incondicionalmente (não é
+        # 100% standalone apesar do setup.py próprio) — sem isso, o
+        # import da CLI falha com ModuleNotFoundError (pydantic_settings).
+        run: pip install -r _core/core/backend/requirements.txt
+
       - name: Validar cada módulo do catálogo
         run: |
           set -e
