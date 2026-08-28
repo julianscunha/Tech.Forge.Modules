@@ -1,5 +1,50 @@
 # Como contribuir com um módulo
 
+## Passo a passo (do zero até a PR aberta)
+
+Abrir uma PR direto pelo site do GitHub sem antes ter uma branch com
+mudanças dá o erro *"Choose different branches or forks..."* — o GitHub
+não tem o que comparar. O fluxo local resolve isso:
+
+```bash
+# 1. Clone os dois repositórios lado a lado (só precisa fazer uma vez)
+git clone https://github.com/julianscunha/Tech.Forge.Modules.git
+git clone https://github.com/julianscunha/Tech.Forge.git
+
+cd Tech.Forge.Modules
+
+# 2. Crie uma branch nova a partir da main atualizada
+git checkout main
+git pull
+git checkout -b add-meu-modulo
+
+# 3. Crie a pasta do seu módulo (veja a estrutura mínima logo abaixo)
+mkdir -p modules/meu_modulo/backend modules/meu_modulo/frontend
+mkdir -p modules/meu_modulo/docs/examples
+# ... crie manifest.yaml, backend/main.py, frontend/index.tsx,
+#     docs/overview.md, docs/examples/basic.md (veja o checklist abaixo)
+
+# 4. Valide localmente ANTES de commitar (evita ida e volta no CI)
+pip install -e ../Tech.Forge/cli
+techforge validate-module modules/meu_modulo/
+
+# 5. Commit e push da branch (não da main)
+git add modules/meu_modulo
+git commit -m "feat: adiciona modulo meu_modulo"
+git push -u origin add-meu-modulo
+
+# 6. Abra a PR — o git já devolve um link pronto depois do push, ou:
+gh pr create --title "feat: adiciona modulo meu_modulo" --body "O que o modulo faz."
+```
+
+Sem o `gh` CLI, é só ir em
+[github.com/julianscunha/Tech.Forge.Modules](https://github.com/julianscunha/Tech.Forge.Modules) —
+depois do `git push`, o GitHub costuma mostrar um banner amarelo
+*"add-meu-modulo had recent pushes"* com um botão **"Compare & pull
+request"** já pronto.
+
+## Validação automática
+
 Toda pull request que adiciona ou altera algo em `modules/**` é validada
 **automaticamente** pelo GitHub Actions
 ([`validate-modules.yml`](.github/workflows/validate-modules.yml)) usando
