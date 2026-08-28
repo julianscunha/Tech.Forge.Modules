@@ -1,0 +1,56 @@
+name: Validate modules
+
+# Roda o MESMO validador do Core (techforge validate-module) contra todo
+# módulo do catálogo, numa PR. Não reimplementa as regras aqui — instala
+# a CLI real do repositório Tech.Forge, pra nunca dessincronizar do que
+# o Core de fato exige.
+#
+# Falha (bloqueia o merge) só em erro real de estrutura/contrato/docs.
+# Avisos (ex: pastas opcionais ausentes) não bloqueiam — mesmo
+# comportamento de rodar `techforge validate-module` localmente sem
+# `--strict`.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "modules/**"
+  workflow_dispatch: {}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONIOENCODING: utf-8
+      PYTHONUTF8: "1"
+    steps:
+      - name: Checkout Tech.Forge.Modules
+        uses: actions/checkout@v4
+
+      - name: Checkout Tech.Forge (fonte do validador real)
+        uses: actions/checkout@v4
+        with:
+          repository: julianscunha/Tech.Forge
+          path: _core
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar techforge CLI
+        run: pip install -e _core/cli
+
+      - name: Validar cada módulo do catálogo
+        run: |
+          set -e
+          status=0
+          shopt -s nullglob
+          for mod in modules/*/; do
+            echo "::group::Validando ${mod}"
+            if ! techforge validate-module "$mod"; then
+              echo "::error::Módulo inválido: ${mod}"
+              status=1
+            fi
+            echo "::endgroup::"
+          done
+          exit $status
