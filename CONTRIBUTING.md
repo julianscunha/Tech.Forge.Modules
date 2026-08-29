@@ -154,7 +154,7 @@ duas etapas:
    protegida, ninguém — nem o bot — dá push direto), e mergeia sozinha
         │
         ▼
-6. main agora tem modules/<id>/index.json (na raiz de modules/) +
+6. main agora tem modules/index.json (na raiz de modules/) +
    modules/<id>/<id>-<versão>.mod — nenhuma pasta de submissions/ solta
    mais. O Marketplace do TechForge lê os dois via
    raw.githubusercontent.com/julianscunha/Tech.Forge.Modules/main/modules,

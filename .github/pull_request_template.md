@@ -12,7 +12,7 @@ entender o módulo rápido — não substitui nada, complementa.
 
 ## Checklist
 
-- [ ] Rodei `techforge validate-module modules/<meu-modulo>/` localmente e não há erros (avisos tudo bem)
+- [ ] Rodei `techforge validate-module submissions/<meu-modulo>/` localmente e não há erros (avisos tudo bem)
 - [ ] O `id` no `manifest.yaml` é `snake_case` e é único no catálogo (não existe outra pasta com o mesmo nome)
 - [ ] `description` no `manifest.yaml` explica o que o módulo faz de verdade (não é um placeholder tipo "TODO")
 - [ ] `docs/overview.md` e `docs/examples/basic.md` existem e têm conteúdo real
