@@ -39,23 +39,28 @@ Em resumo:
 
 ```text
 Tech.Forge.Modules/
-└── modules/
+├── submissions/              # transitório — onde você contribui (ver CONTRIBUTING.md)
+│   └── <id-do-modulo>/
+│       ├── manifest.yaml
+│       ├── backend/main.py
+│       ├── frontend/index.tsx
+│       └── docs/
+└── modules/                  # permanente — só a automação escreve aqui
+    ├── index.json             # catálogo: 1 entrada por módulo, sempre a versão atual
     └── <id-do-modulo>/
-        ├── manifest.yaml          # identidade e metadados do módulo
-        ├── backend/main.py        # lógica do módulo (Python)
-        ├── frontend/index.tsx     # interface do módulo (se houver)
-        └── docs/                  # documentação obrigatória do módulo
+        ├── <id>-1.0.0.mod     # toda versão já publicada fica aqui, empilhada
+        └── <id>-1.0.1.mod
 ```
 
-Cada pasta dentro de `modules/` é um módulo completo e independente —
-pode ser instalado no TechForge sem afetar nenhum outro.
+Você contribui em `submissions/<id>/` — a automação lê dali, empacota em
+`.mod` e guarda o resultado em `modules/<id>/`, pra sempre (ver
+[CONTRIBUTING.md](CONTRIBUTING.md) pro fluxo completo). As duas pastas são
+separadas de propósito: assim, editar sua contribuição nunca arrisca
+apagar sem querer um `.mod` de produção que já estava publicado.
 
-A pasta **não** é organizada por categoria (`modules/<categoria>/<id>/`)
-de propósito: a categoria de um módulo já vive dentro do seu
-`manifest.yaml` e pode mudar ao longo do tempo — se ela também definisse
-o caminho da pasta, qualquer link de importação já distribuído quebraria
-quando isso acontecesse. O endereço de um módulo (`modules/<id>/`) é
-estável pra sempre; a categoria é só um metadado de exibição.
+O endereço de um módulo (`modules/<id>/`) é estável pra sempre — a
+categoria (que vive dentro do `manifest.yaml` e pode mudar) nunca faz
+parte do caminho da pasta, exatamente pra isso.
 
 ## Módulos disponíveis
 
@@ -65,10 +70,10 @@ proposital: com centenas ou milhares de módulos, uma tabela única
 tornaria este README impossível de navegar.
 
 Esta seção é **gerada automaticamente** por
-[`scripts/generate_modules_readme.py`](scripts/generate_modules_readme.py),
-rodado pelo GitHub Actions
+[`scripts/generate_modules_readme.py`](scripts/generate_modules_readme.py)
+a partir de `modules/index.json`, rodado pelo GitHub Actions
 ([`.github/workflows/update-modules-readme.yml`](.github/workflows/update-modules-readme.yml))
-toda vez que um `manifest.yaml` muda em `main`. **Não edite manualmente
+toda vez que uma submissão é mesclada em `main`. **Não edite manualmente
 entre os marcadores abaixo** — a próxima execução do workflow sobrescreve.
 
 <!-- MODULES:START -->
@@ -98,8 +103,8 @@ documentada aqui e no repositório principal.
 
 Consulte o guia de desenvolvimento de módulos no repositório principal:
 [`Tech.Forge` → Developer Center → Guia de Desenvolvimento](https://github.com/julianscunha/Tech.Forge/blob/main/docs/developer-center/guides/development-guide.md).
-Depois de pronto, seu módulo pode ser adicionado aqui como uma pasta nova
-dentro de `modules/`.
+Depois de pronto, envie seu módulo como uma pasta nova em `submissions/`
+— veja o passo a passo completo em [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licença
 
