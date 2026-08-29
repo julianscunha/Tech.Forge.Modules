@@ -1,0 +1,11 @@
+id: e2e_test_module
+name: E2E Test Module
+version: 1.0.0
+description: Modulo descartavel, criado so para validar o fluxo submissions -> modules de ponta a ponta.
+category: Testing
+vendor: TechForge
+author: TechForge
+entry_backend: backend/main.py
+entry_frontend: frontend/index.tsx
+icon: flask
+order: 999
