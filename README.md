@@ -93,11 +93,11 @@ entre os marcadores abaixo** — a próxima execução do workflow sobrescreve.
 
 ## Como um módulo daqui chega até o TechForge?
 
-Hoje, a forma de usar um módulo daqui é baixar a pasta correspondente e
-instalá-la manualmente (`techforge modules` / interface do Marketplace no
-Core). **Uma forma de importar um módulo diretamente por um link** (sem
-precisar baixar manualmente) está planejada — quando estiver pronta, será
-documentada aqui e no repositório principal.
+O Core lê este repositório automaticamente como catálogo oficial — na aba
+**Catálogo** do Marketplace, todo módulo publicado aqui aparece pronto pra
+instalar com um clique (`.mod` baixado e instalado direto de
+`modules/<id>/`, sem precisar baixar nada manualmente). Detalhes técnicos
+em [`Tech.Forge` → Developer Center → Module Catalog](https://github.com/julianscunha/Tech.Forge/blob/main/docs/developer-center/core/module-catalog.md).
 
 ## Quero criar um módulo novo
 
