@@ -1,0 +1,15 @@
+{
+  "modules": [
+    {
+      "id": "system_information_service",
+      "name": "System Information Service",
+      "version": "1.0.0",
+      "category": "System",
+      "vendor": "TechForge",
+      "author": "TechForge Team",
+      "description": "Fornece informações do sistema operacional e do runtime onde o TechForge está rodando.",
+      "mod_url": "system_information_service-1.0.0.mod",
+      "checksum": "d86536afb4cd02e034519a61c3939a4f65a501d4bbfbe1c41f3f876396c819fb"
+    }
+  ]
+}
