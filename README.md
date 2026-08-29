@@ -78,7 +78,7 @@ entre os marcadores abaixo** — a próxima execução do workflow sobrescreve.
 
 <!-- MODULES:START -->
 
-**2 módulo(s)** em **2 categoria(s)**. Clique numa categoria pra ver os módulos dentro dela.
+**1 módulo(s)** em **1 categoria(s)**. Clique numa categoria pra ver os módulos dentro dela.
 
 <details>
 <summary><strong>System</strong> — 1 módulo(s)</summary>
@@ -86,15 +86,6 @@ entre os marcadores abaixo** — a próxima execução do workflow sobrescreve.
 | Módulo | O que faz |
 |---|---|
 | [`system_information_service`](modules/system_information_service) | Fornece informações do sistema operacional e do runtime onde o TechForge está rodando. |
-
-</details>
-
-<details>
-<summary><strong>Testing</strong> — 1 módulo(s)</summary>
-
-| Módulo | O que faz |
-|---|---|
-| [`e2e_test_module`](modules/e2e_test_module) | Modulo descartavel, criado so para validar o fluxo submissions -> modules de ponta a ponta. |
 
 </details>
 
