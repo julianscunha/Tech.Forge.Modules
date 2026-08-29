@@ -1,10 +1,27 @@
-name: Update modules README
+name: Update modules README + Build catalog
+
+# Depois de todo merge em main: regenera o README com a lista de modulos e
+# reconstroi o catalogo oficial (index.json + .mod de cada modulo) dentro da
+# propria pasta modules/. Depois de empacotar, a pasta-fonte de cada modulo
+# (manifest.yaml + backend/ + frontend/) e removida — nao faz sentido quem
+# clona o repositorio (ou o Marketplace, via GitHub Contents API) baixar
+# centenas de milhares de pastas-fonte quando so o .mod importa pra
+# instalacao. Pra atualizar um modulo, o autor reenvia a pasta-fonte
+# completa numa nova PR; o merge reempacota e poda de novo.
+#
+# O Marketplace do TechForge le index.json + .mod via
+# raw.githubusercontent.com — nenhuma outra automacao/setup e necessaria por
+# parte de quem contribui um modulo (fluxo de PR nao muda).
+#
+# `if: github.actor != 'github-actions[bot]'` evita loop: o proprio commit
+# automatico desta job (que apaga manifest.yaml ao podar a fonte) tambem
+# bate no filtro de path abaixo e dispararia a si mesmo de novo.
 
 on:
   push:
     branches: [main]
     paths:
-      - "modules/**/manifest.yaml"
+      - "modules/**"
       - "scripts/generate_modules_readme.py"
   workflow_dispatch: {}
 
@@ -13,9 +30,17 @@ permissions:
 
 jobs:
   update-readme:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Tech.Forge.Modules
+        uses: actions/checkout@v4
+
+      - name: Checkout Tech.Forge (fonte do techforge CLI)
+        uses: actions/checkout@v4
+        with:
+          repository: julianscunha/Tech.Forge
+          path: _core
 
       - uses: actions/setup-python@v5
         with:
@@ -24,17 +49,34 @@ jobs:
       - name: Install dependencies
         run: pip install pyyaml
 
+      - name: Instalar techforge CLI
+        run: pip install -e _core/cli
+
+      - name: Instalar dependencias do Core
+        # A CLI importa app.module_engine.* incondicionalmente — sem isso o
+        # import falha com ModuleNotFoundError (pydantic_settings).
+        run: pip install -r _core/core/backend/requirements.txt
+
       - name: Generate module list
         run: python scripts/generate_modules_readme.py
 
-      - name: Commit README if it changed
+      - name: Build catalog (index.json + .mod)
+        env:
+          PYTHONIOENCODING: utf-8
+          PYTHONUTF8: "1"
+        run: techforge catalog build-index modules --output modules
+
+      - name: Prune source folders already packaged
+        run: python scripts/prune_packaged_sources.py
+
+      - name: Commit changes if any
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- README.md; then
-            echo "README.md unchanged — nothing to commit."
+          git add -A -- README.md modules/
+          if git diff --cached --quiet; then
+            echo "Nothing changed — skipping commit."
           else
-            git add README.md
-            git commit -m "chore: atualiza lista de modulos no README (automatico)"
+            git commit -m "chore: atualiza README e catalogo (index.json + .mod) [automatico]"
             git push
           fi
