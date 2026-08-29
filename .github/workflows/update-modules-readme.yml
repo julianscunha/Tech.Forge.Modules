@@ -13,9 +13,16 @@ name: Update modules README + Build catalog
 # raw.githubusercontent.com — nenhuma outra automacao/setup e necessaria por
 # parte de quem contribui um modulo (fluxo de PR nao muda).
 #
-# `if: github.actor != 'github-actions[bot]'` evita loop: o proprio commit
-# automatico desta job (que apaga manifest.yaml ao podar a fonte) tambem
-# bate no filtro de path abaixo e dispararia a si mesmo de novo.
+# main e protegida (required status check "validate"), entao esta job nunca
+# da push direto — abre um PR com o resultado e espera o proprio check
+# "validate" passar (dispara pelo filtro pull_request de validate-modules.yml
+# em qualquer PR que toque modules/**) antes de mergear via squash. Isso nao
+# exige nenhuma excecao na protecao da branch nem habilitar auto-merge do
+# GitHub — a job so espera e mergea ela mesma, como um humano faria.
+#
+# `if: github.actor != 'github-actions[bot]'` evita loop: o merge feito pela
+# propria job (que apaga manifest.yaml ao podar a fonte) tambem bate no
+# filtro de path abaixo e dispararia a si mesma de novo.
 
 on:
   push:
@@ -27,11 +34,13 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   update-readme:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout Tech.Forge.Modules
         uses: actions/checkout@v4
@@ -69,14 +78,28 @@ jobs:
       - name: Prune source folders already packaged
         run: python scripts/prune_packaged_sources.py
 
-      - name: Commit changes if any
+      - name: Publish catalog changes via PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A -- README.md modules/
           if git diff --cached --quiet; then
-            echo "Nothing changed — skipping commit."
-          else
-            git commit -m "chore: atualiza README e catalogo (index.json + .mod) [automatico]"
-            git push
+            echo "Nothing changed — skipping."
+            exit 0
           fi
+
+          BRANCH="catalog-build/${{ github.run_id }}"
+          git checkout -b "$BRANCH"
+          git commit -m "chore: atualiza README e catalogo (index.json + .mod) [automatico]"
+          git push origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --title "chore: atualiza catalogo (index.json + .mod) [automatico]" \
+            --body "Gerado automaticamente apos merge em main: empacota modulos novos/atualizados em .mod, regenera index.json e remove pastas-fonte ja empacotadas." \
+            --base main --head "$BRANCH")
+          echo "PR aberto: $PR_URL"
+
+          gh pr checks "$PR_URL" --watch --interval 5 --fail-fast
+          gh pr merge "$PR_URL" --squash --delete-branch
