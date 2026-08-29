@@ -111,5 +111,16 @@ jobs:
             --base main --head "$BRANCH")
           echo "PR aberto: $PR_URL"
 
+          # `gh pr checks` errors immediately with "no checks reported" if
+          # called before GitHub has registered any check run yet — a race
+          # right after `gh pr create`, not a real absence of checks. Poll
+          # until at least one check shows up (validate-modules.yml usually
+          # registers within a couple seconds), then watch it to completion.
+          for i in $(seq 1 12); do
+            if gh pr checks "$PR_URL" --json name --jq 'length' 2>/dev/null | grep -qv '^0$'; then
+              break
+            fi
+            sleep 5
+          done
           gh pr checks "$PR_URL" --watch --interval 5 --fail-fast
           gh pr merge "$PR_URL" --squash --delete-branch
