@@ -20,9 +20,14 @@ name: Update modules README + Build catalog
 # exige nenhuma excecao na protecao da branch nem habilitar auto-merge do
 # GitHub — a job so espera e mergea ela mesma, como um humano faria.
 #
-# `if: github.actor != 'github-actions[bot]'` evita loop: o merge feito pela
-# propria job (que apaga manifest.yaml ao podar a fonte) tambem bate no
-# filtro de path abaixo e dispararia a si mesma de novo.
+# O merge da PR gerada por esta job (passo "Publish catalog changes via PR")
+# tambem apaga manifest.yaml ao podar a fonte, entao bate de novo no filtro
+# de path abaixo e dispararia a si mesma em loop. Como o merge usa um PAT
+# pessoal (nao o GITHUB_TOKEN — GitHub bloqueia Actions de criar/aprovar
+# PRs), o `github.actor` do push resultante e a pessoa dona do PAT, nao
+# "github-actions[bot]" — checar actor nao detecta esse caso. Em vez disso,
+# o guard checa a mensagem do commit (toda PR gerada por esta job carrega
+# "[automatico]" no titulo/commit, ver step final).
 
 on:
   push:
@@ -38,7 +43,7 @@ permissions:
 
 jobs:
   update-readme:
-    if: github.actor != 'github-actions[bot]'
+    if: "!contains(github.event.head_commit.message, '[automatico]')"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -80,7 +85,12 @@ jobs:
 
       - name: Publish catalog changes via PR
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITHUB_TOKEN cannot create/approve PRs (GitHub's own anti
+          # supply-chain-abuse restriction) — a fine-grained PAT scoped to
+          # just this repo (contents + pull_requests) is required for
+          # `gh pr create`/`gh pr merge` below. The branch push itself still
+          # uses the default GITHUB_TOKEN (contents:write is enough for that).
+          GH_TOKEN: ${{ secrets.CATALOG_BOT_PAT }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
