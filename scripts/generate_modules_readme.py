@@ -1,57 +1,58 @@
 #!/usr/bin/env python3
 """
-Gera a seção "Módulos disponíveis" do README.md a partir dos manifests
-reais em modules/*/manifest.yaml — agrupada por categoria, sempre
-retraída (<details>) para o README continuar legível conforme o
-catálogo cresce (pensado para escalar até milhares de módulos).
+Gera a seção "Módulos disponíveis" do README.md a partir de modules/index.json
+— agrupada por categoria, sempre retraída (<details>) para o README continuar
+legível conforme o catálogo cresce (pensado para escalar até milhares de
+módulos).
+
+Lê modules/index.json, não submissions/**/manifest.yaml: index.json é o
+registro durável de tudo que já foi publicado (mantido pela própria CI, via
+`techforge catalog build-index`); submissions/<id>/ é transitório — some
+assim que a CI empacota o módulo em .mod, então nunca reflete o catálogo
+completo, só o que está em trânsito numa PR.
 
 Uso:
     python scripts/generate_modules_readme.py
 
 Roda automaticamente via GitHub Actions (.github/workflows/
-update-modules-readme.yml) sempre que um manifest.yaml muda.
+update-modules-readme.yml), depois que `techforge catalog build-index` já
+atualizou modules/index.json na mesma execução.
 """
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
 
-import yaml
-
 ROOT = Path(__file__).resolve().parent.parent
-MODULES_DIR = ROOT / "modules"
+INDEX_FILE = ROOT / "modules" / "index.json"
 README = ROOT / "README.md"
 
 START_MARKER = "<!-- MODULES:START -->"
 END_MARKER = "<!-- MODULES:END -->"
 
 
-def scan_modules() -> list[dict]:
-    """Lê manifest.yaml de cada pasta em modules/ — ignora pastas sem manifest
-    ou com YAML inválido (não deve travar o workflow por um manifest quebrado)."""
-    modules = []
-    if not MODULES_DIR.is_dir():
-        return modules
+def scan_published_modules() -> list[dict]:
+    """Lê modules/index.json — lista vazia se ainda não existe (catálogo novo)."""
+    if not INDEX_FILE.is_file():
+        return []
+    try:
+        data = json.loads(INDEX_FILE.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        print(f"WARNING: modules/index.json inválido: {exc}", file=sys.stderr)
+        return []
 
-    for mod_dir in sorted(MODULES_DIR.iterdir()):
-        manifest_path = mod_dir / "manifest.yaml"
-        if not mod_dir.is_dir() or not manifest_path.is_file():
-            continue
-        try:
-            raw = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
-        except yaml.YAMLError as exc:
-            print(f"WARNING: skipping {manifest_path} — invalid YAML: {exc}", file=sys.stderr)
-            continue
-
-        modules.append({
-            "id": str(raw.get("id", mod_dir.name)),
-            "name": str(raw.get("name", raw.get("id", mod_dir.name))),
-            "category": str(raw.get("category") or "Uncategorized"),
-            "description": str(raw.get("description", "")).strip(),
-            "path": mod_dir.name,
-        })
-    return modules
+    return [
+        {
+            "id": entry["id"],
+            "name": entry.get("name", entry["id"]),
+            "category": entry.get("category") or "Uncategorized",
+            "description": entry.get("description", "").strip(),
+            "path": entry["id"],
+        }
+        for entry in data.get("modules", [])
+    ]
 
 
 def render_section(modules: list[dict]) -> str:
@@ -106,7 +107,7 @@ def update_readme(section: str) -> bool:
 
 
 def main() -> None:
-    modules = scan_modules()
+    modules = scan_published_modules()
     section = render_section(modules)
     changed = update_readme(section)
     print(f"Scanned {len(modules)} module(s). README {'updated' if changed else 'unchanged'}.")

@@ -1,40 +1,46 @@
 name: Update modules README + Build catalog
 
-# Depois de todo merge em main: regenera o README com a lista de modulos e
-# reconstroi o catalogo oficial (index.json + .mod de cada modulo) dentro da
-# propria pasta modules/. Depois de empacotar, a pasta-fonte de cada modulo
-# (manifest.yaml + backend/ + frontend/) e removida — nao faz sentido quem
-# clona o repositorio (ou o Marketplace, via GitHub Contents API) baixar
-# centenas de milhares de pastas-fonte quando so o .mod importa pra
-# instalacao. Pra atualizar um modulo, o autor reenvia a pasta-fonte
-# completa numa nova PR; o merge reempacota e poda de novo.
+# Depois de todo merge em main que toca submissions/**: reconstroi o
+# catalogo oficial (index.json + .mod de cada modulo, aninhado por modulo em
+# modules/<id>/<id>-<versao>.mod — toda versao ja publicada fica empilhada
+# ali, pra sempre) e regenera o README a partir do index.json resultante.
+# Depois de empacotar, submissions/<id>/ (a pasta-fonte que o contribuidor
+# enviou na PR) e removida por inteiro.
 #
-# O Marketplace do TechForge le index.json + .mod via
-# raw.githubusercontent.com — nenhuma outra automacao/setup e necessaria por
-# parte de quem contribui um modulo (fluxo de PR nao muda).
+# submissions/ e modules/ sao dois conceitos deliberadamente separados:
+# - submissions/<id>/  → transitorio, so existe entre a PR e o merge; e onde
+#   o contribuidor sobe manifest.yaml + backend/ + frontend/ + docs/.
+# - modules/<id>/       → permanente, gerenciada só por esta job; acumula
+#   index.json (na raiz de modules/) + um .mod por versao ja publicada.
+# Misturar os dois na mesma pasta correria o risco de um contribuidor que
+# "recriar a pasta do zero" apagar sem saber os .mod de producao junto com
+# a fonte antiga — submissions/ nunca tem nada de producao, entao um
+# rmtree() nela e sempre seguro.
+#
+# O Marketplace do TechForge le modules/index.json + modules/<id>/<id>-<v>.mod
+# via raw.githubusercontent.com — nenhuma outra automacao/setup e necessaria
+# por parte de quem contribui um modulo (fluxo de PR nao muda).
 #
 # main e protegida (required status check "validate"), entao esta job nunca
 # da push direto — abre um PR com o resultado e espera o proprio check
 # "validate" passar (dispara pelo filtro pull_request de validate-modules.yml
-# em qualquer PR que toque modules/**) antes de mergear via squash. Isso nao
-# exige nenhuma excecao na protecao da branch nem habilitar auto-merge do
-# GitHub — a job so espera e mergea ela mesma, como um humano faria.
+# em qualquer PR que toque submissions/**) antes de mergear via squash. Isso
+# nao exige nenhuma excecao na protecao da branch nem habilitar auto-merge
+# do GitHub — a job so espera e mergea ela mesma, como um humano faria.
 #
-# O merge da PR gerada por esta job (passo "Publish catalog changes via PR")
-# tambem apaga manifest.yaml ao podar a fonte, entao bate de novo no filtro
-# de path abaixo e dispararia a si mesma em loop. Como o merge usa um PAT
-# pessoal (nao o GITHUB_TOKEN — GitHub bloqueia Actions de criar/aprovar
-# PRs), o `github.actor` do push resultante e a pessoa dona do PAT, nao
-# "github-actions[bot]" — checar actor nao detecta esse caso. Em vez disso,
-# o guard checa a mensagem do commit (toda PR gerada por esta job carrega
-# "[automatico]" no titulo/commit, ver step final).
+# O merge da PR gerada por esta job tambem apaga submissions/<id>/, bate de
+# novo no filtro de path abaixo e dispararia a si mesma em loop. Como o
+# merge usa um PAT pessoal (nao o GITHUB_TOKEN — GitHub bloqueia Actions de
+# criar/aprovar PRs), o `github.actor` do push resultante e a pessoa dona do
+# PAT, nao "github-actions[bot]" — checar actor nao detecta esse caso. Em
+# vez disso, o guard checa a mensagem do commit (toda PR gerada por esta job
+# carrega "[automatico]" no titulo/commit, ver step final).
 
 on:
   push:
     branches: [main]
     paths:
-      - "modules/**"
-      - "scripts/generate_modules_readme.py"
+      - "submissions/**"
   workflow_dispatch: {}
 
 permissions:
@@ -71,17 +77,26 @@ jobs:
         # import falha com ModuleNotFoundError (pydantic_settings).
         run: pip install -r _core/core/backend/requirements.txt
 
-      - name: Generate module list
-        run: python scripts/generate_modules_readme.py
-
-      - name: Build catalog (index.json + .mod)
+      - name: Build catalog (index.json + .mod, aninhado por modulo)
         env:
           PYTHONIOENCODING: utf-8
           PYTHONUTF8: "1"
-        run: techforge catalog build-index modules --output modules
+        run: techforge catalog build-index submissions --output modules
 
-      - name: Prune source folders already packaged
+      - name: Generate module list
+        # Roda DEPOIS do build-index — le modules/index.json (registro
+        # durável), que so acabou de ser atualizado nesta mesma execucao.
+        run: python scripts/generate_modules_readme.py
+
+      - name: Prune submissions/ ja empacotadas
         run: python scripts/prune_packaged_sources.py
+
+      - name: Remove sidecars .mod.sha256 do catalogo publicado
+        # O checksum ja esta em modules/index.json (campo "checksum"); nada
+        # le o .mod.sha256 de volta — e so um sidecar util pra quem roda o
+        # builder localmente (techforge package-module), nao pro catalogo
+        # publicado.
+        run: find modules -name "*.mod.sha256" -delete
 
       - name: Publish catalog changes via PR
         env:
@@ -94,7 +109,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A -- README.md modules/
+          git add -A -- README.md modules/ submissions/
           if git diff --cached --quiet; then
             echo "Nothing changed — skipping."
             exit 0
@@ -107,7 +122,7 @@ jobs:
 
           PR_URL=$(gh pr create \
             --title "chore: atualiza catalogo (index.json + .mod) [automatico]" \
-            --body "Gerado automaticamente apos merge em main: empacota modulos novos/atualizados em .mod, regenera index.json e remove pastas-fonte ja empacotadas." \
+            --body "Gerado automaticamente apos merge em main: empacota modulos novos/atualizados em .mod, regenera index.json e remove as pastas de submissions/ ja empacotadas." \
             --base main --head "$BRANCH")
           echo "PR aberto: $PR_URL"
 

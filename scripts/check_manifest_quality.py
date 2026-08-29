@@ -16,7 +16,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
-MODULES_DIR = ROOT / "modules"
+SUBMISSIONS_DIR = ROOT / "submissions"
 
 MIN_DESCRIPTION_LENGTH = 15
 PLACEHOLDER_VALUES = {
@@ -51,15 +51,15 @@ def check_module(mod_dir: Path) -> list[str]:
 
 
 def main() -> int:
-    if not MODULES_DIR.is_dir():
+    if not SUBMISSIONS_DIR.is_dir():
         return 0
 
     failed = False
-    for mod_dir in sorted(MODULES_DIR.iterdir()):
+    for mod_dir in sorted(SUBMISSIONS_DIR.iterdir()):
         if not mod_dir.is_dir():
             continue
         for err in check_module(mod_dir):
-            print(f"::error file=modules/{mod_dir.name}/manifest.yaml::{err}")
+            print(f"::error file=submissions/{mod_dir.name}/manifest.yaml::{err}")
             failed = True
 
     if failed:
