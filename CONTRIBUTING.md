@@ -106,9 +106,49 @@ docs/examples/integration.md
 - O nome da pasta em `modules/` deve ser o mesmo `id` (mantém o endereço
   do módulo previsível e estável).
 
-## Depois de mesclada
+## Depois de mesclada: da sua PR até o módulo virar `.mod` no catálogo
 
-Assim que sua PR for mesclada em `main`, outro workflow
-([`update-modules-readme.yml`](.github/workflows/update-modules-readme.yml))
-atualiza automaticamente a lista de módulos no [README](README.md) — não
-precisa editar o README manualmente.
+Sua PR só tem a pasta-fonte solta (`manifest.yaml` + `backend/` +
+`frontend/` + `docs/`) — você nunca precisa gerar um `.mod` nem tocar em
+`index.json` manualmente. Todo o resto acontece sozinho, em duas etapas:
+
+```
+1. Você abre a PR com modules/<id>/           (pasta-fonte solta)
+        │
+        ▼
+2. validate-modules.yml roda (checagem "validate", obrigatória p/ merge)
+        │  usa o mesmo `techforge validate-module` que o Core aplica
+        │  na instalação — falha aqui bloqueia o merge
+        ▼
+3. Você (ou o dono do repo) aprova e mergeia sua PR em main
+        │
+        ▼
+4. update-modules-readme.yml dispara (push em main tocando modules/**)
+        │  - regenera README.md com a lista de módulos
+        │  - roda `techforge catalog build-index modules --output modules`
+        │    → gera <id>-<version>.mod + .mod.sha256 + modules/index.json
+        │  - remove a pasta-fonte modules/<id>/ já empacotada
+        ▼
+5. Essa job abre uma 2ª PR automática com o resultado (README + .mod +
+   index.json), espera o check "validate" dessa PR passar (main é
+   protegida, ninguém — nem o bot — dá push direto), e mergeia sozinha
+        │
+        ▼
+6. main agora tem modules/index.json + modules/<id>-<version>.mod —
+   nenhuma pasta-fonte solta mais. O Marketplace do TechForge lê os dois
+   via raw.githubusercontent.com/julianscunha/Tech.Forge.Modules/main/modules,
+   com 1 único fetch de index.json pra descobrir o catálogo inteiro.
+```
+
+**Por que a pasta-fonte some depois de empacotada:** manter a pasta-fonte
+*e* o `.mod` pra sempre não escala — com centenas/milhares de módulos,
+`main` acumularia os dois formatos indefinidamente, e clonar o repo (ou o
+Marketplace listar `modules/` via API) ficaria cada vez mais pesado sem
+necessidade, já que só o `.mod` importa pra instalação. Pra **atualizar**
+um módulo já publicado, reenvie a pasta-fonte completa numa PR nova — o
+merge reempacota (nova versão) e poda de novo, do mesmo jeito.
+
+Workflows envolvidos:
+[`validate-modules.yml`](.github/workflows/validate-modules.yml) (passo 2) e
+[`update-modules-readme.yml`](.github/workflows/update-modules-readme.yml)
+(passos 4–5).
