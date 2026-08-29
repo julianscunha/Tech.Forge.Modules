@@ -1,17 +1,6 @@
 {
   "modules": [
     {
-      "id": "e2e_test_module",
-      "name": "E2E Test Module",
-      "version": "1.0.0",
-      "category": "Testing",
-      "vendor": "TechForge",
-      "author": "TechForge",
-      "description": "Modulo descartavel, criado so para validar o fluxo submissions -> modules de ponta a ponta.",
-      "mod_url": "e2e_test_module/e2e_test_module-1.0.0.mod",
-      "checksum": "89b9d165ef50c80d4d7bf652b8430b253822267055d7273a53a1d152cbdec5fe"
-    },
-    {
       "id": "system_information_service",
       "name": "System Information Service",
       "version": "1.0.0",
