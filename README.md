@@ -1,6 +1,6 @@
 <div align="center">
 
-# 📦 Tech.Forge.Modules
+<img src="docs/assets/banner.svg" alt="TechForge Modules — catálogo de módulos" width="100%" />
 
 **Catálogo de módulos para a plataforma [TechForge](https://github.com/julianscunha/Tech.Forge).**
 
