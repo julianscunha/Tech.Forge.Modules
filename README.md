@@ -4,6 +4,11 @@
 
 **Catálogo de módulos para a plataforma [TechForge](https://github.com/julianscunha/Tech.Forge).**
 
+[![TechForge Core](https://img.shields.io/badge/TechForge-Core-f97316?logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0xMiAyTDIgN2wxMCA1IDEwLTV6TTIgMTdsMTAgNSAxMC01TTIgMTJsMTAgNSAxMC01Ii8+PC9zdmc+&logoColor=white)](https://github.com/julianscunha/Tech.Forge)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-ff69b4)](CONTRIBUTING.md)
+[![Format](https://img.shields.io/badge/format-.mod%20package-009688)](https://github.com/julianscunha/Tech.Forge/blob/main/docs/developer-center/core/module-catalog.md)
+
 </div>
 
 ---
