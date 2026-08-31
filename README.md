@@ -83,13 +83,14 @@ entre os marcadores abaixo** — a próxima execução do workflow sobrescreve.
 
 <!-- MODULES:START -->
 
-**1 módulo(s)** em **1 categoria(s)**. Clique numa categoria pra ver os módulos dentro dela.
+**2 módulo(s)** em **1 categoria(s)**. Clique numa categoria pra ver os módulos dentro dela.
 
 <details>
-<summary><strong>System</strong> — 1 módulo(s)</summary>
+<summary><strong>System</strong> — 2 módulo(s)</summary>
 
 | Módulo | O que faz |
 |---|---|
+| [`system_health_check`](modules/system_health_check) | Executa uma verificação simples de saúde do sistema, consumindo o System Information Service. |
 | [`system_information_service`](modules/system_information_service) | Fornece informações do sistema operacional e do runtime onde o TechForge está rodando. |
 
 </details>
