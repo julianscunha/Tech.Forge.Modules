@@ -3,13 +3,13 @@
     {
       "id": "system_health_check",
       "name": "System Health Check",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "category": "System",
       "vendor": "TechForge",
       "author": "TechForge Team",
       "description": "Executa uma verificação simples de saúde do sistema, consumindo o System Information Service.",
-      "mod_url": "system_health_check/system_health_check-1.0.0.mod",
-      "checksum": "7d86cadae84c74ad62c43d1dbc678965a76e0bcc3b0c444632a6d66b91c44b11"
+      "mod_url": "system_health_check/system_health_check-1.0.1.mod",
+      "checksum": "ebae1a4fc909008a56c8d2f5626c1a1af9ba2477b904b18189bcf464ea50f420"
     },
     {
       "id": "system_information_service",
