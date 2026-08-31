@@ -112,6 +112,12 @@ Consulte o guia de desenvolvimento de módulos no repositório principal:
 Depois de pronto, envie seu módulo como uma pasta nova em `submissions/`
 — veja o passo a passo completo em [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Segurança e conduta
+
+Encontrou uma vulnerabilidade em um módulo publicado? Veja
+[`SECURITY.md`](SECURITY.md) em vez de abrir uma issue pública. Este
+projeto segue o [Código de Conduta](CODE_OF_CONDUCT.md).
+
 ## Licença
 
 MIT — mesma licença do repositório principal `Tech.Forge`.

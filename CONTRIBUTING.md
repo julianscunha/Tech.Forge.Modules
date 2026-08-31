@@ -171,3 +171,9 @@ Workflows envolvidos:
 [`validate-modules.yml`](.github/workflows/validate-modules.yml) (passo 2) e
 [`update-modules-readme.yml`](.github/workflows/update-modules-readme.yml)
 (passos 4–5).
+
+## Código de conduta e segurança
+
+Este projeto segue o [Código de Conduta](CODE_OF_CONDUCT.md). Encontrou
+uma vulnerabilidade em um módulo publicado (não um bug comum)? Veja
+[`SECURITY.md`](SECURITY.md) em vez de abrir uma issue pública.
