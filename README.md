@@ -83,7 +83,16 @@ entre os marcadores abaixo** — a próxima execução do workflow sobrescreve.
 
 <!-- MODULES:START -->
 
-**2 módulo(s)** em **1 categoria(s)**. Clique numa categoria pra ver os módulos dentro dela.
+**3 módulo(s)** em **2 categoria(s)**. Clique numa categoria pra ver os módulos dentro dela.
+
+<details>
+<summary><strong>Sales</strong> — 1 módulo(s)</summary>
+
+| Módulo | O que faz |
+|---|---|
+| [`lead_tracker`](modules/lead_tracker) | Módulo de Opportunity Intelligence: transforma dados de clientes, prospects, portfólio tecnológico, produtos e serviços em oportunidades comerciais priorizadas (cross-sell, up-sell, modernização, otimização de custos). |
+
+</details>
 
 <details>
 <summary><strong>System</strong> — 2 módulo(s)</summary>
