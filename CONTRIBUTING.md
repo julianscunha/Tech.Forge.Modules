@@ -22,7 +22,7 @@ git checkout -b add-meu-modulo
 #    logo abaixo) — NÃO em modules/, que é gerenciada só pela automação
 mkdir -p submissions/meu_modulo/backend submissions/meu_modulo/frontend
 mkdir -p submissions/meu_modulo/docs/examples
-# ... crie manifest.yaml, backend/main.py, frontend/index.tsx,
+# ... crie manifest.yaml, backend/main.py, frontend/index.js,
 #     docs/overview.md, docs/examples/basic.md (veja o checklist abaixo)
 
 # 4. Valide localmente ANTES de commitar (evita ida e volta no CI)
@@ -95,7 +95,9 @@ submissions/<id-do-modulo>/
 │                               # entry_frontend, icon, order
 ├── backend/main.py             # exporta `router` (FastAPI) e `module`
 │                               # (instância de ModuleContract)
-├── frontend/index.tsx          # exporta `moduleConfig` + componente default
+├── frontend/index.js           # ESM compilado (não .tsx cru — o Core só
+│                               # serve .js/.mjs); default export com
+│                               # render(container: HTMLElement)
 └── docs/
     ├── overview.md              # obrigatório — o que o módulo faz
     └── examples/
