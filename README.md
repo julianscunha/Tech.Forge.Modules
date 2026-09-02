@@ -48,7 +48,7 @@ Tech.Forge.Modules/
 │   └── <id-do-modulo>/
 │       ├── manifest.yaml
 │       ├── backend/main.py
-│       ├── frontend/index.tsx
+│       ├── frontend/index.js   # ESM compilado — o Core só serve .js/.mjs
 │       └── docs/
 └── modules/                  # permanente — só a automação escreve aqui
     ├── index.json             # catálogo: 1 entrada por módulo, sempre a versão atual
