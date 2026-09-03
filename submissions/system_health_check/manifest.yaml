@@ -1,0 +1,38 @@
+id: system_health_check
+name: System Health Check
+version: 1.1.0
+
+platform_min_version: 1.0.0
+platform_max_version: 2.0.0
+
+category: System
+module_type: application
+vendor: TechForge
+author: TechForge Team
+description: Dashboard de hardware e métricas, recomendações inteligentes de desempenho (com aplicação segura e reversível) e relatório de antes/depois, consumindo o System Information Service.
+
+# Navigation & Presentation — required
+icon: activity
+order: 11
+
+# Optional presentation
+color: green
+
+entry_backend: backend/main.py
+entry_frontend: frontend/index.js
+
+# Dependency Governance (Fase 8.1) — Application depende do Service
+# System Information Service via contrato público, nunca por import direto.
+dependencies:
+  - target:
+      type: module
+      id: system_information_service
+    version_range: ">=1.0.0,<2.0.0"
+    required: true
+
+homepage:
+documentation:
+
+# Security fields — populados pelo Package Manager na instalação
+signature:
+checksum:
