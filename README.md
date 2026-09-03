@@ -99,8 +99,8 @@ entre os marcadores abaixo** — a próxima execução do workflow sobrescreve.
 
 | Módulo | O que faz |
 |---|---|
-| [`system_health_check`](modules/system_health_check) | Executa uma verificação simples de saúde do sistema, consumindo o System Information Service. |
-| [`system_information_service`](modules/system_information_service) | Fornece informações do sistema operacional e do runtime onde o TechForge está rodando. |
+| [`system_health_check`](modules/system_health_check) | Dashboard de hardware e métricas, recomendações inteligentes de desempenho (com aplicação segura e reversível) e relatório de antes/depois, consumindo o System Information Service. |
+| [`system_information_service`](modules/system_information_service) | Fornece informações de sistema operacional, hardware, métricas ao vivo e (no Windows) serviços/drivers/atualizações do runtime onde o TechForge está rodando. |
 
 </details>
 

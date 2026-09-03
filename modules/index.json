@@ -14,24 +14,24 @@
     {
       "id": "system_health_check",
       "name": "System Health Check",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "category": "System",
       "vendor": "TechForge",
       "author": "TechForge Team",
-      "description": "Executa uma verificação simples de saúde do sistema, consumindo o System Information Service.",
-      "mod_url": "system_health_check/system_health_check-1.0.1.mod",
-      "checksum": "ebae1a4fc909008a56c8d2f5626c1a1af9ba2477b904b18189bcf464ea50f420"
+      "description": "Dashboard de hardware e métricas, recomendações inteligentes de desempenho (com aplicação segura e reversível) e relatório de antes/depois, consumindo o System Information Service.",
+      "mod_url": "system_health_check/system_health_check-1.1.0.mod",
+      "checksum": "9a747890f52ab1baa9443277c38d36b020d4705249174b087a80ddc34802de31"
     },
     {
       "id": "system_information_service",
       "name": "System Information Service",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "System",
       "vendor": "TechForge",
       "author": "TechForge Team",
-      "description": "Fornece informações do sistema operacional e do runtime onde o TechForge está rodando.",
-      "mod_url": "system_information_service/system_information_service-1.0.0.mod",
-      "checksum": "ab9ff083715894f4babc5b236bd5fb5a23af95bd03fe8cb374fcff1eeec4736e"
+      "description": "Fornece informações de sistema operacional, hardware, métricas ao vivo e (no Windows) serviços/drivers/atualizações do runtime onde o TechForge está rodando.",
+      "mod_url": "system_information_service/system_information_service-1.1.0.mod",
+      "checksum": "8fd103dd156a39af857b821cfd223522bb568557455e0a2bf1f31f7fd6db3dff"
     }
   ]
 }
