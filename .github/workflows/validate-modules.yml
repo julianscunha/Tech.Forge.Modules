@@ -56,15 +56,29 @@ jobs:
         # import da CLI falha com ModuleNotFoundError (pydantic_settings).
         run: pip install -r _core/core/backend/requirements.txt
 
+      - name: Resolver versão da plataforma (última release do Core)
+        # Sem --platform-version, o CLI usa o default embutido (1.0.0),
+        # que fica desatualizado assim que o Core lança uma versão nova —
+        # bloqueando qualquer módulo com platform_min_version mais recente
+        # mesmo sendo compatível de verdade com o Core publicado. Resolve
+        # dinamicamente pra nunca precisar tocar aqui de novo a cada release.
+        id: platform_version
+        run: |
+          version=$(gh api repos/julianscunha/Tech.Forge/releases/latest --jq .tag_name | sed 's/^v//')
+          echo "value=${version}" >> "$GITHUB_OUTPUT"
+          echo "Validando contra platform_version=${version}"
+
       - name: Validar cada módulo submetido
         id: validate_modules
+        env:
+          PLATFORM_VERSION: ${{ steps.platform_version.outputs.value }}
         run: |
           set -e
           status=0
           shopt -s nullglob
           for mod in submissions/*/; do
             echo "::group::Validando ${mod}"
-            if ! techforge validate-module "$mod"; then
+            if ! techforge validate-module "$mod" --platform-version "$PLATFORM_VERSION"; then
               echo "::error::Módulo inválido: ${mod}"
               status=1
             fi
