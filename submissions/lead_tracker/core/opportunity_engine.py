@@ -1,0 +1,689 @@
+"""
+Motor de Oportunidades — regras determinísticas.
+
+Regras vêm antes da IA (CLAUDE.md 'Deterministic rules come before AI').
+Sem IA aqui. `financial_potential` e `strategic_score` ficam `None`: não há
+dado real pra sustentá-los ainda, e nunca inventamos número — núcleo genérico,
+sem depender de informação específica de uma empresa ou fabricante.
+
+Regras não são hardcoded no core — são dados, configuráveis pelo portfólio
+(fabricante/produto específico é decisão do usuário, não do código).
+
+`CorrelationRule`/`RuleError` moraram aqui até a Fase C — agora vivem em
+core/models.py (regra virou modelo de domínio persistido). Reexportados
+daqui pra quem já importava deste módulo continuar funcionando.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta, timezone
+from uuid import NAMESPACE_URL, uuid5
+
+from core.models import (
+    Company, CompanySignal, Contact, CorrelationRule, Opportunity, OpportunityStatus, OutreachTouch, PeriodType,
+    Portfolio, Product, RuleError, Service, SourceRef,
+)
+
+_WARM_WINDOW_DAYS = 120
+_LUKEWARM_WINDOW_DAYS = 270
+_LUKEWARM_MULTIPLIER = 0.85
+_COLD_MULTIPLIER = 0.5
+
+# Fase C, Fatia 5 — Alcance x Criticidade -> banda de severidade, revisado
+# com o agente especialista Deal Strategist. Qualquer um dos dois em branco
+# nunca entra aqui — compute_severity_band trata isso antes (fallback
+# "nao_avaliado"), nunca uma banda calculada com informação incompleta.
+_SEVERITY_TABLE: dict[tuple[str, str], str] = {
+    ("isolado", "nao_critico"): "baixo",
+    ("isolado", "critico_interno"): "medio",
+    ("isolado", "critico_exposto"): "alto",
+    ("parcial", "nao_critico"): "medio",
+    ("parcial", "critico_interno"): "alto",
+    ("parcial", "critico_exposto"): "alto",
+    ("generalizado", "nao_critico"): "medio",
+    ("generalizado", "critico_interno"): "alto",
+    ("generalizado", "critico_exposto"): "critico",
+}
+
+# Cadência de QBR — saúde/renovação → dias sugeridos, revisado com os
+# agentes especialistas Account Strategist e Pipeline Analyst. "verde" é o
+# melhor estado, "vermelha" o pior — ordem usada tanto pra tirar o pior dos
+# dois eixos de saúde quanto pra escalonar a linha da tabela de cadência.
+_HEALTH_ORDER = ["verde", "amarela", "vermelha"]
+
+_QBR_TABLE: dict[tuple[str, str], tuple[int | None, str]] = {
+    ("vermelha", "ate_30"): (0, "imediata"),
+    ("vermelha", "31_120"): (0, "imediata"),
+    ("vermelha", "121_270"): (15, "revisao_de_risco"),
+    ("vermelha", "sem_data_ou_longa"): (15, "revisao_de_risco"),
+    ("amarela", "ate_30"): (7, "revisao_antes_da_renovacao"),
+    ("amarela", "31_120"): (30, "revisao_de_acompanhamento"),
+    ("amarela", "121_270"): (60, "revisao_de_acompanhamento"),
+    ("amarela", "sem_data_ou_longa"): (90, "revisao_de_rotina"),
+    ("verde", "ate_30"): (0, "alinhada_a_renovacao"),
+    ("verde", "31_120"): (None, "alinhada_a_renovacao"),  # None = usa os dias reais até a renovação
+    ("verde", "121_270"): (90, "revisao_de_rotina"),
+    ("verde", "sem_data_ou_longa"): (180, "revisao_de_rotina"),
+}
+
+# Fase D — transição manual de status. Decisão do Sales Coach (consultado
+# junto com o Plan, que divergiu recomendando sequência estrita): dropdown
+# livre, sem máquina de estados no backend — sequência rígida força cliques
+# inúteis num deal fechado rápido e não impede "pipeline mentiroso" (rep só
+# atualiza tudo no fim). O freio real é pedir justificativa nos saltos que
+# importam: 2+ estágios de uma vez, ou reabertura de "dismissed" — vira dado
+# de coaching, não burocracia. "dismissed" fica fora da ordem linear (é
+# terminal, não um estágio a mais na sequência).
+_STAGE_ORDER = ["detected", "qualified", "reviewed", "contacted", "opportunity"]
+
+
+def requires_status_change_justification(old_status: str, new_status: str) -> bool:
+    if old_status == new_status:
+        return False
+    if old_status == "dismissed":
+        return new_status != "dismissed"  # reabertura sempre exige motivo
+    if old_status in _STAGE_ORDER and new_status in _STAGE_ORDER:
+        return _STAGE_ORDER.index(new_status) - _STAGE_ORDER.index(old_status) >= 2
+    return False
+
+
+# Fase D — oportunidade zumbi: parada há muito tempo no MESMO estágio,
+# conceito à parte do SLA de aging (item diferente da tabela de cadência de
+# QBR/aging: "nunca saiu de detected" vs. "estagnou em qualquer estágio").
+# 30 dias é o piso conservador recomendado (Pipeline Analyst) enquanto não
+# existe histórico suficiente pra calibrar por mediana real de estágio.
+_ZOMBIE_DAYS = 30
+
+
+def is_zombie_opportunity(status: str, last_touch_at: datetime, now: datetime) -> bool:
+    """`dismissed` nunca é zumbi — já saiu do funil, não está "parado" nele.
+    `last_touch_at` é a última transição real de status
+    (`OpportunityStatusChange.entered_at`) quando existe; sem histórico
+    (oportunidade nunca teve transição manual), quem chama passa
+    `Opportunity.first_detected_at` como proxy — nunca `synced_at` (esse é
+    reescrito a cada `/sync` que ainda detecta a oportunidade, o que
+    neutralizaria o zumbi pra exatamente quem nunca foi triado). Degradado,
+    mas nunca finge saúde boa por falta de dado (mesmo princípio de
+    `compute_account_health`)."""
+    if status == "dismissed":
+        return False
+    if last_touch_at.tzinfo is None:
+        last_touch_at = last_touch_at.replace(tzinfo=timezone.utc)
+    return (now - last_touch_at).days > _ZOMBIE_DAYS
+
+
+# Fase D — SLA de triagem: único threshold desta fase que o roadmap pede
+# configurável pelo usuário (os demais — zumbi, saúde de conta — são fixos
+# por ora, sem tela de configuração pra eles ainda).
+AGING_SLA_ENV_KEY = "AGING_SLA_DAYS"
+_AGING_SLA_DEFAULT_DAYS = 7
+
+
+def parse_aging_sla_days(env: dict[str, str]) -> int:
+    """Lê o SLA de triagem do `.env` — valor ausente, vazio ou inválido cai
+    no default (7 dias), nunca quebra a leitura da configuração."""
+    raw = env.get(AGING_SLA_ENV_KEY, "")
+    try:
+        days = int(raw)
+    except ValueError:
+        return _AGING_SLA_DEFAULT_DAYS
+    return days if days > 0 else _AGING_SLA_DEFAULT_DAYS
+
+
+def is_aging_opportunity(status: str, first_detected_at: datetime, now: datetime, sla_days: int) -> bool:
+    """Roadmap: oportunidade em `detected` há mais de N dias sem virar
+    `qualified`/`dismissed` — SLA de triagem, conceito à parte de zumbi
+    (`is_zombie_opportunity` é sobre estagnação em QUALQUER estágio; aging
+    é só sobre nunca ter saído do primeiro). Nunca o mesmo threshold do
+    zumbi — misturar os dois esconderia qual dos dois sinais disparou."""
+    if status != "detected":
+        return False
+    if first_detected_at.tzinfo is None:
+        first_detected_at = first_detected_at.replace(tzinfo=timezone.utc)
+    return (now - first_detected_at).days > sla_days
+
+
+def current_period_key(period_type: PeriodType, today: date) -> str:
+    """Rótulo do período calendário corrente pra uma meta de rep (Fase D,
+    módulo 7). Trimestre é calendário fixo (jan-mar=Q1, abr-jun=Q2, ...),
+    nunca "trailing 90 dias" — meta comercial é sempre pactuada contra o
+    calendário fiscal/comercial, não contra uma janela móvel."""
+    if period_type == PeriodType.QUARTERLY:
+        return f"{today.year}-Q{(today.month - 1) // 3 + 1}"
+    return f"{today.year}-{today.month:02d}"
+
+
+def rep_target_id(rep_id: str, period_type: PeriodType, period_key: str) -> str:
+    """Id determinístico (mesmo padrão de `_generate_opportunity_id`):
+    cadastrar meta de novo pro mesmo rep+período é upsert, nunca
+    duplicata — sem isso, reenviar o formulário de meta duas vezes criaria
+    2 metas concorrentes pro mesmo rep/período, e a agregação teria que
+    decidir arbitrariamente qual vale."""
+    key = f"rep_target:{rep_id}:{period_type.value}:{period_key}"
+    return str(uuid5(NAMESPACE_URL, key))
+
+
+def field_mapping_id(provider_id: str, source_field_api_name: str) -> str:
+    """Fase F, módulo 3 (`field-mapping-store`) — id determinístico, mesmo
+    padrão de `rep_target_id` (agrupado aqui por consistência com os demais
+    helpers de id determinístico de config, não por ser lógica de scoring):
+    cadastrar mapeamento de novo pro mesmo campo é upsert, nunca duplicata."""
+    key = f"field_mapping:{provider_id}:{source_field_api_name}"
+    return str(uuid5(NAMESPACE_URL, key))
+
+
+# ── Fase G, módulo 6 (`suggested-cadence-engine`) — Outbound Strategist
+# consultado (engineering/specs/fase-g-outreach-assistido.md, módulo 6). Função pura:
+# nunca dispara nada, nunca decide status sozinha (CLAUDE.md "IA/regra nunca
+# decide sozinha" aplicado aqui também, mesmo sem IA envolvida) — só sugere,
+# sempre depende do rep marcar como enviado (`OutreachTouch`, módulo 5).
+#
+# Passo (índice na cadência) é determinado só pela CONTAGEM de toques já
+# feitos — nunca por inspecionar o texto de `reason_label` (que é string
+# livre) pra "adivinhar" em que categoria cada toque anterior estava. Isso
+# também garante estruturalmente que a categoria nunca se repete: cada
+# posição da tabela já tem uma categoria própria.
+OUTREACH_DAILY_CAP = 25
+
+_CUSTOMER_CADENCE: tuple[tuple[int, str, str], ...] = (
+    (0, "email", "continuidade_uso_atual"),
+    (7, "ligação", "gap_portfolio"),
+    (7, "linkedin", "prova_social_urgencia"),
+)
+
+_PROSPECT_CADENCE: tuple[tuple[int, str, str], ...] = (
+    (0, "email", "abertura_sinal"),
+    (4, "ligação", "reforco_angulo_novo"),
+)
+
+CADENCE_AWAITING_INTERVAL = "aguardando_intervalo"
+CADENCE_EXHAUSTED = "cadencia_esgotada"
+CADENCE_DAILY_CAP_REACHED = "cap_diario_atingido"
+
+
+@dataclass(frozen=True)
+class CadenceSuggestion:
+    channel: str
+    reason_category: str
+
+
+def compute_next_suggested_touch(
+    is_customer: bool,
+    touches: list[OutreachTouch],
+    first_detected_at: datetime,
+    now: datetime,
+    touches_today_for_rep: int,
+    daily_cap: int = OUTREACH_DAILY_CAP,
+) -> CadenceSuggestion | str:
+    """Devolve o próximo toque sugerido, ou um dos 3 estados que a UI
+    (módulo 7) precisa distinguir (nunca um `None` opaco pros três casos,
+    Outbound Strategist consultado):
+    - `CADENCE_AWAITING_INTERVAL`: ainda dentro do intervalo do próximo
+      toque — nada a fazer agora, não é um estado especial pra UI mostrar.
+    - `CADENCE_EXHAUSTED`: todos os toques da cadência (3 cliente / 2
+      prospecção fria) já foram feitos sem avanço de status — sinal de que
+      o rep precisa decidir algo manualmente (dismissar, escalar, outro
+      ângulo), não "está tudo bem, só esperar".
+    - `CADENCE_DAILY_CAP_REACHED`: cota diária do REP (não da oportunidade)
+      já atingida — cap único somando cliente ativo + prospecção fria
+      (nunca dois caps paralelos, senão volta a ser volume disfarçado).
+
+    `touches_today_for_rep`/`daily_cap` chegam como parâmetro (nunca lidos
+    de sessão/DB aqui) — mesmo padrão de `select_promotions`
+    (core/geo_promotion.py, Fase E): a cota é conceito de aplicação, a
+    função de domínio fica pura e testável sem sessão.
+
+    `touches` não precisa vir ordenado por `sent_at` — a função ordena
+    internamente antes de calcular o "anchor" (achado da revisão de
+    código: `list_outreach_touches` não garante ordem; sem essa defesa,
+    uma lista fora de ordem escolheria silenciosamente o toque errado
+    como mais recente, sem levantar exceção nenhuma)."""
+    # Cota diária checada antes de qualquer coisa por oportunidade —
+    # intencional: uma oportunidade com cadência esgotada E cap batido
+    # sempre mostra "cap batido" (é o estado mais urgente/acionável do rep
+    # como um todo), nunca "esgotada" (achado de revisão de código).
+    if touches_today_for_rep >= daily_cap:
+        return CADENCE_DAILY_CAP_REACHED
+
+    cadence = _CUSTOMER_CADENCE if is_customer else _PROSPECT_CADENCE
+    step = len(touches)
+    if step >= len(cadence):
+        return CADENCE_EXHAUSTED
+
+    interval_days, channel, category = cadence[step]
+    ordered_touches = sorted(touches, key=lambda t: t.sent_at)
+    anchor = ordered_touches[-1].sent_at if ordered_touches else first_detected_at
+    due_at = anchor + timedelta(days=interval_days)
+    if now < due_at:
+        return CADENCE_AWAITING_INTERVAL
+
+    return CadenceSuggestion(channel=channel, reason_category=category)
+
+
+# Fase G, módulo 8 — Sales Coach consultado sobre o limiar. Duas causas
+# distintas de silêncio, nunca colapsadas numa (motivo carregado no
+# resultado, mesmo padrão de CadenceSuggestion.reason_category):
+# - `SILENCE_NEVER_CONTACTED`: zero toques — reusa o mesmo SLA de triagem
+#   de `is_aging_opportunity` (nunca um segundo threshold pro mesmo fato de
+#   "sentou sem ninguém mexer"), só que também vale pra `qualified`, não só
+#   `detected`.
+# - `SILENCE_CADENCE_EXHAUSTED`: cadência já rodou inteira (mesma condição
+#   que faz módulo 6 devolver CADENCE_EXHAUSTED) e ainda assim ficou quieta
+#   por um buffer ADICIONAL — conta a partir do último toque, nunca do zero,
+#   pra não duplicar o alerta que o módulo 6 já mostra no dia em que a
+#   cadência esgota (é uma escalada do mesmo sinal, não um segundo sinal
+#   independente). Buffer proporcional ao espaçamento de cada cadência (7d
+#   entre toques de cliente, 4d entre toques de prospecção fria).
+SILENCE_NEVER_CONTACTED = "nunca_contatado"
+SILENCE_CADENCE_EXHAUSTED = "cadencia_esgotada_silencio"
+_SILENCE_BUFFER_CUSTOMER_DAYS = 3
+_SILENCE_BUFFER_PROSPECT_DAYS = 2
+
+
+@dataclass(frozen=True)
+class SilenceSignal:
+    reason: str
+    days_silent: int
+
+
+def compute_silence_signal(
+    status: str,
+    touches: list[OutreachTouch],
+    first_detected_at: datetime,
+    is_customer: bool,
+    now: datetime,
+    sla_days: int,
+) -> SilenceSignal | None:
+    """Sinal PURO de "foi ficando quieta" numa oportunidade ainda em fase
+    inicial (`detected`/`qualified`) — nunca dispara nada sozinho, só
+    alimenta uma sugestão pro rep decidir manualmente (mesmo princípio de
+    `is_zombie_opportunity`/`is_aging_opportunity`: NUNCA chama
+    `update_opportunity_status`). `None` quando não há sinal — nunca um
+    booleano opaco, o motivo (`reason`) e há quanto tempo (`days_silent`)
+    são o que a UI usa pra escrever a frase certa."""
+    if status not in ("detected", "qualified"):
+        return None
+
+    if not touches:
+        anchor = first_detected_at if first_detected_at.tzinfo else first_detected_at.replace(tzinfo=timezone.utc)
+        days = (now - anchor).days
+        return SilenceSignal(SILENCE_NEVER_CONTACTED, days) if days > sla_days else None
+
+    cadence = _CUSTOMER_CADENCE if is_customer else _PROSPECT_CADENCE
+    if len(touches) < len(cadence):
+        return None
+
+    # Normaliza cada `sent_at` ANTES do max() — comparar um naive com um
+    # aware no meio da lista estoura TypeError (achado da revisão de
+    # código); `OutreachTouch.sent_at` sempre nasce aware via `_now()`
+    # (core/models.py), mas essa defesa custa uma linha e evita virar
+    # bomba-relógio se algum dia um chamador semear um naive.
+    last_touch_at = max(t.sent_at if t.sent_at.tzinfo else t.sent_at.replace(tzinfo=timezone.utc) for t in touches)
+    days = (now - last_touch_at).days
+    buffer_days = _SILENCE_BUFFER_CUSTOMER_DAYS if is_customer else _SILENCE_BUFFER_PROSPECT_DAYS
+    return SilenceSignal(SILENCE_CADENCE_EXHAUSTED, days) if days > buffer_days else None
+
+
+# Fase H, módulo 3 — Deal Strategist e Account Strategist consultados
+# (divergiram em detalhe, reconciliados aqui):
+# - Deal Strategist: nunca inventar risco quando o dado é insuficiente
+#   (maioria dos toques pode não ter `contact_id`, já que é opcional desde o
+#   módulo 1) — mantido como a regra central desta função.
+# - Account Strategist: gate amplo (qualquer status ativo, não só
+#   qualified+) e independente da cadência de QBR (eixo ortogonal, mesmo
+#   princípio de `compute_severity_band` vs. `compute_account_health` nunca
+#   colapsarem). Mantido — a guarda de dado insuficiente já filtra o ruído
+#   de início de funil que motivaria um corte por estágio.
+# - Os dois convergiram: nunca mascarar `compute_silence_signal` (são fatos
+#   ortogonais — "ninguém respondeu" vs. "poucas pessoas cobrem a conta"),
+#   nunca misturar as duas causas num motivo só, `stance=detrator` fica de
+#   fora (é sobre qualidade da relação, não cobertura — sinal futuro
+#   separado).
+_ACTIVE_CONTACT_WINDOW_DAYS = 90
+_DECISOR_SENIORITY_TIER = "decisor"
+
+SINGLE_THREADED_RISK = "single_threaded_risk"
+NO_ECONOMIC_BUYER_CONTACT = "no_economic_buyer_contact"
+
+
+@dataclass(frozen=True)
+class ThreadingRiskSignal:
+    reasons: tuple[str, ...]
+    active_contact_count: int
+    has_active_decisor: bool
+
+
+def compute_threading_risk_signal(
+    status: str,
+    contacts: list[Contact],
+    touches: list[OutreachTouch],
+    now: datetime,
+    window_days: int = _ACTIVE_CONTACT_WINDOW_DAYS,
+) -> ThreadingRiskSignal | None:
+    """Sinal PURO de cobertura de stakeholder fraca — nunca dispara nada
+    sozinho (mesmo princípio de `is_zombie_opportunity`/`compute_silence_signal`:
+    NUNCA chama `update_opportunity_status`). `contacts` é sempre da CONTA
+    inteira (quem existe não muda por oportunidade); `touches` é sempre da
+    OPORTUNIDADE específica (quem foi tocado nesse negócio) — a mesma conta
+    com múltiplas oportunidades ativas pode dar resultados diferentes por
+    chamada, de propósito.
+
+    `None` quando `dismissed` (já saiu do funil) OU quando não há nenhum
+    toque com `contact_id` na janela — dado insuficiente nunca vira risco
+    inventado (achado do Deal Strategist: `contact_id` é opcional desde o
+    módulo 1, a maioria dos toques históricos não vai ter, "0 contato
+    ativo" por ausência de dado não é o mesmo fato que "0 contato ativo"
+    porque ninguém foi tocado de verdade).
+
+    `reasons` pode ter 0 (função devolve `None`), 1 ou 2 entradas — nunca
+    colapsa as duas causas num motivo só, mesmo princípio de `SilenceSignal`:
+    - `SINGLE_THREADED_RISK`: exatamente 1 contato distinto ativo na janela.
+    - `NO_ECONOMIC_BUYER_CONTACT`: nenhum contato com
+      `seniority_tier == "decisor"` entre os ativos."""
+    if status == "dismissed":
+        return None
+
+    cutoff = now - timedelta(days=window_days)
+
+    def _sent_at_utc(touch: OutreachTouch) -> datetime:
+        return touch.sent_at if touch.sent_at.tzinfo else touch.sent_at.replace(tzinfo=timezone.utc)
+
+    active_touches = [t for t in touches if t.contact_id and _sent_at_utc(t) >= cutoff]
+    if not active_touches:
+        return None
+
+    active_contact_ids = {t.contact_id for t in active_touches}
+    contacts_by_id = {c.id: c for c in contacts}
+    has_active_decisor = any(
+        contacts_by_id[cid].seniority_tier == _DECISOR_SENIORITY_TIER
+        for cid in active_contact_ids if cid in contacts_by_id
+    )
+
+    reasons: list[str] = []
+    if len(active_contact_ids) == 1:
+        reasons.append(SINGLE_THREADED_RISK)
+    if not has_active_decisor:
+        reasons.append(NO_ECONOMIC_BUYER_CONTACT)
+
+    if not reasons:
+        return None
+
+    return ThreadingRiskSignal(
+        reasons=tuple(reasons), active_contact_count=len(active_contact_ids), has_active_decisor=has_active_decisor,
+    )
+
+
+__all__ = [
+    "AGING_SLA_ENV_KEY", "CADENCE_AWAITING_INTERVAL", "CADENCE_DAILY_CAP_REACHED", "CADENCE_EXHAUSTED",
+    "CadenceSuggestion", "CorrelationRule", "NO_ECONOMIC_BUYER_CONTACT", "OUTREACH_DAILY_CAP", "RuleError",
+    "SILENCE_CADENCE_EXHAUSTED", "SILENCE_NEVER_CONTACTED", "SINGLE_THREADED_RISK", "SilenceSignal",
+    "ThreadingRiskSignal", "compute_account_health", "compute_next_suggested_touch", "compute_qbr_suggested_days",
+    "compute_severity_band", "compute_silence_signal", "compute_threading_risk_signal", "current_period_key",
+    "evaluate_rules", "field_mapping_id", "is_aging_opportunity", "is_zombie_opportunity", "parse_aging_sla_days",
+    "rep_target_id", "requires_status_change_justification",
+]
+
+
+def compute_severity_band(scope_note: str | None, criticality: str | None) -> str:
+    """Banda qualitativa de severidade — nunca um valor em R$ inventado
+    (regra de domínio). Sempre derivada na leitura, nunca persistida —
+    elimina o risco de dessincronizar do que a gerou. Qualquer um dos dois
+    campos em branco (ainda não avaliado pelo vendedor) cai em
+    "nao_avaliado", nunca numa banda calculada com informação incompleta."""
+    if scope_note is None or criticality is None:
+        return "nao_avaliado"
+    return _SEVERITY_TABLE.get((scope_note, criticality), "nao_avaliado")
+
+
+def _recency_health_tier(recency_days: int | None) -> str | None:
+    if recency_days is None:
+        return None
+    if recency_days <= _WARM_WINDOW_DAYS:
+        return "verde"
+    return "amarela" if recency_days <= _LUKEWARM_WINDOW_DAYS else "vermelha"
+
+
+def _confidence_health_tier(avg_open_confidence: float | None) -> str | None:
+    if avg_open_confidence is None:
+        return None
+    if avg_open_confidence >= 0.7:
+        return "verde"
+    return "amarela" if avg_open_confidence >= 0.4 else "vermelha"
+
+
+def compute_account_health(recency_days: int | None, avg_open_confidence: float | None) -> str:
+    """Saúde da conta pra cadência de QBR — pior valor (nunca média) entre
+    recência de atividade (reaproveita as mesmas faixas de
+    _warmth_multiplier) e confidence_score médio das oportunidades abertas
+    da conta. Revisado com o agente especialista Pipeline Analyst: nunca
+    deriva de contagem de CompanySignal aberto — isso já é o 3º eixo da
+    tabela de cadência (compute_qbr_suggested_days), contar de novo aqui
+    duplicaria o mesmo fato. Conta sem nenhuma das duas informações (nunca
+    teve atividade registrada E não tem oportunidade aberta) cai em
+    "dados_insuficientes", nunca "verde" por ausência de sinal ruim."""
+    recency_tier = _recency_health_tier(recency_days)
+    confidence_tier = _confidence_health_tier(avg_open_confidence)
+    tiers = [t for t in (recency_tier, confidence_tier) if t is not None]
+    if not tiers:
+        return "dados_insuficientes"
+    return max(tiers, key=_HEALTH_ORDER.index)
+
+
+def _renewal_band(renewal_days: int | None) -> str:
+    if renewal_days is None or renewal_days > _LUKEWARM_WINDOW_DAYS:
+        return "sem_data_ou_longa"
+    if renewal_days <= 30:
+        return "ate_30"
+    return "31_120" if renewal_days <= 120 else "121_270"
+
+
+def compute_qbr_suggested_days(health: str, renewal_days: int | None, open_signal_count: int) -> tuple[int, str]:
+    """Dias sugeridos até a próxima revisão de conta + rótulo do motivo —
+    tabela fixa saúde × janela de renovação (_QBR_TABLE), nunca uma conta
+    calendário fixo. "dados_insuficientes" é tratado como "amarela"
+    conservadora (não afirma saúde boa por falta de dado, mas também não
+    trava a conta em urgência máxima). ≥2 CompanySignal abertos escalona
+    a linha uma posição pra mais urgente (mesma tabela, não um eixo cruzado
+    à parte — evitaria explosão combinatória, decisão do Pipeline Analyst).
+    Quando a tabela marca "alinhada à renovação" (verde, renovação em
+    31-120 dias) o número de dias sugeridos é o próprio prazo até a
+    renovação, nunca um valor fixo desconectado da data real."""
+    row = "amarela" if health == "dados_insuficientes" else health
+    if open_signal_count >= 2:
+        row = _HEALTH_ORDER[min(len(_HEALTH_ORDER) - 1, _HEALTH_ORDER.index(row) + 1)]
+    days, reason = _QBR_TABLE[(row, _renewal_band(renewal_days))]
+    if days is None:
+        days = max(renewal_days, 0) if renewal_days is not None else 0
+    return days, reason
+
+
+def _deterministic_opportunity_id(company_id: str, rule_id: str, evidence: list[str]) -> str:
+    """ID estável a partir de (empresa, regra, evidência) — nunca aleatório.
+    Sem isso, rodar sync duas vezes pra uma empresa cujo portfólio não
+    mudou persistiria uma Opportunity NOVA a cada vez (upsert por id só
+    evita duplicata se o id for o mesmo pro mesmo fato). `evidence` entra
+    na chave porque uma regra de relação pode disparar mais de uma vez por
+    empresa (um produto por vez), cada disparo precisa de id próprio."""
+    key = f"{company_id}:{rule_id}:{'|'.join(sorted(evidence))}"
+    return str(uuid5(NAMESPACE_URL, key))
+
+
+def _portfolio_items(portfolio: Portfolio, signals: list[CompanySignal]) -> set[str]:
+    """Conjunto de "itens presentes" pra regra simples avaliar — portfólio
+    (vendor/product/service) + signal_type de todo CompanySignal ABERTO
+    (sinal resolvido/descartado nunca dispara regra: já foi tratado).
+    Sinal entra aqui, não como mecanismo novo — "só 3 tipos de regra"."""
+    items = set(portfolio.vendor_ids) | set(portfolio.product_ids) | set(portfolio.service_ids)
+    items |= {s.signal_type for s in signals if s.status == "open"}
+    return items
+
+
+def _categories_present(items: set[str], products: list[Product], services: list[Service]) -> set[str]:
+    categories = {p.category for p in products if p.id in items and p.category}
+    categories |= {s.category for s in services if s.id in items and s.category}
+    return categories
+
+
+def _fact_description(rule: CorrelationRule, evidence: list[str]) -> str:
+    """`evidence` fica vazio numa regra só-de-ausência (`absent`/
+    `absent_category` sem `requires`, mecanismo válido pra `CorrelationRule`)
+    — sem isso o [FATO] sairia em branco, exatamente o log técnico cru que
+    o princípio 2 proíbe."""
+    if evidence:
+        return ", ".join(evidence)
+    ausencia = rule.absent or rule.absent_category
+    return f"ausência de {', '.join(ausencia)}" if ausencia else "condição da regra satisfeita"
+
+
+def _evidence_summary(
+    rule: CorrelationRule, evidence: list[str], source_type: str, risk_flag: str | None, synced_at: datetime,
+) -> str:
+    """Princípio 2 do roadmap: fato + implicação de negócio + fonte + data,
+    nunca um log técnico cru. `[RISCO]` quando a regra sinaliza risco
+    técnico (prerequisite), `[OPORTUNIDADE]` nos demais casos."""
+    label = "RISCO" if risk_flag else "OPORTUNIDADE"
+    return (
+        f"[FATO] {_fact_description(rule, evidence)} → [{label}] {rule.justification} → "
+        f"[FONTE] {source_type}, sincronizado em {synced_at:%d/%m/%Y}"
+    )
+
+
+def _warmth_multiplier(company: Company | None) -> float:
+    """Fase C, Fatia 4a (corrigido após revisão com Pipeline Analyst — ciclo
+    de venda B2B de infraestrutura roda 90-180+ dias, corte binário em 90
+    dias tratava conta só no ritmo normal do ciclo como "esfriada" e
+    igualava "91 dias sem atividade" a "700 dias"). 3 níveis: quente
+    (≤120 dias) mantém confiança cheia; morno (121-270 dias) reduz 15%;
+    muito frio (>270 dias OU nunca registrado — ausência já é o sinal,
+    nunca um terceiro estado "desconhecido") reduz 50%. `company` não
+    passado (retrocompat) não penaliza.
+
+    `last_activity_at` sempre chega UTC-aware por quem já persistiu/mapeou
+    (core/repository.py `_ensure_utc`, providers/salesforce.py), mas essa
+    função é chamada com um `Company` vindo de fora — reanexa UTC se algum
+    dia vier naive, em vez de deixar `TypeError` explodir cru até o sync
+    (CLAUDE.md: nunca vazar exceção técnica pro usuário)."""
+    if company is None or company.last_activity_at is None:
+        return 1.0 if company is None else _COLD_MULTIPLIER
+    last_activity_at = company.last_activity_at
+    if last_activity_at.tzinfo is None:
+        last_activity_at = last_activity_at.replace(tzinfo=timezone.utc)
+    age_days = (datetime.now(timezone.utc) - last_activity_at).days
+    if age_days <= _WARM_WINDOW_DAYS:
+        return 1.0
+    return _LUKEWARM_MULTIPLIER if age_days <= _LUKEWARM_WINDOW_DAYS else _COLD_MULTIPLIER
+
+
+def _build_opportunity(
+    rule: CorrelationRule, portfolio: Portfolio, evidence: list[str],
+    risk_flag: str | None = None, company: Company | None = None,
+) -> Opportunity:
+    source_type = "rule_engine"
+    synced_at = datetime.now(timezone.utc)
+    confidence_score = rule.confidence_score * _warmth_multiplier(company)
+    return Opportunity(
+        id=_deterministic_opportunity_id(portfolio.company_id, rule.id, evidence),
+        company_id=portfolio.company_id,
+        type=rule.opportunity_type,
+        opportunity_score=rule.opportunity_score,
+        financial_potential=None,
+        strategic_score=None,
+        confidence_score=confidence_score,
+        evidence=evidence,
+        justification=rule.justification,
+        sources=[SourceRef(type=source_type, confidence=rule.confidence_score)],
+        status=OpportunityStatus.DETECTED,
+        risk_flag=risk_flag,
+        evidence_summary=_evidence_summary(rule, evidence, source_type, risk_flag, synced_at),
+        discovery_prompt=rule.discovery_prompt,
+        synced_at=synced_at,
+    )
+
+
+def _evaluate_simple_rule(rule: CorrelationRule, items: set[str]) -> Opportunity | None:
+    requires_met = all(item in items for item in rule.requires)
+    absent_met = not any(item in items for item in rule.absent)
+    return None if not (requires_met and absent_met) else rule
+
+
+def _evaluate_category_rule(rule: CorrelationRule, categories: set[str]) -> list[str] | None:
+    requires_met = all(cat in categories for cat in rule.requires_category)
+    absent_met = not any(cat in categories for cat in rule.absent_category)
+    if not (requires_met and absent_met):
+        return None
+    return sorted(categories & set(rule.requires_category))
+
+
+def _evaluate_relation_rule(
+    rule: CorrelationRule, portfolio: Portfolio, items: set[str], products: list[Product],
+    company: Company | None,
+) -> list[Opportunity]:
+    """`prerequisite`: produto presente sem o serviço-pré-requisito vira
+    `risk_flag` (nunca uma oportunidade de venda fake). `substitute`:
+    produto e seu substituto ambos presentes vira oportunidade de
+    consolidação (via `rule.opportunity_type`, convenção `"consolidation"`)."""
+    results: list[Opportunity] = []
+    for product in products:
+        if product.id not in items:
+            continue
+        for relation in product.related_services:
+            if relation.relation_type != rule.relation_type:
+                continue
+            service_present = relation.service_id in items
+            if rule.relation_type == "prerequisite" and not service_present:
+                results.append(_build_opportunity(
+                    rule, portfolio, evidence=[product.id], company=company,
+                    risk_flag=f"{product.id} vendido sem o pré-requisito {relation.service_id}.",
+                ))
+            elif rule.relation_type == "substitute" and service_present:
+                results.append(_build_opportunity(
+                    rule, portfolio, evidence=[product.id, relation.service_id], company=company,
+                ))
+    return results
+
+
+def evaluate_rules(
+    portfolio: Portfolio,
+    rules: list[CorrelationRule],
+    products: list[Product] | None = None,
+    services: list[Service] | None = None,
+    signals: list[CompanySignal] | None = None,
+    company: Company | None = None,
+) -> list[Opportunity]:
+    """
+    Avalia cada regra ativa contra o portfólio da empresa. Uma regra usa só
+    um dos 3 mecanismos (checado em `CorrelationRule`, nunca combinados):
+    presença/ausência simples, categoria, ou relação tipada (precisa do
+    catálogo — `products`/`services` — pra resolver categoria/relação;
+    omitidos, regra de categoria/relação simplesmente não encontra nada,
+    retrocompatível com quem só usa regra simples). `signals` (sinal de
+    expansão/risco, Fase B) entra como item a mais na regra simples —
+    `requires=["renewal_upcoming"]` dispara se a empresa tiver um
+    `CompanySignal` aberto desse tipo, mesmo mecanismo de sempre. `company`
+    (Fase C, Fatia 4a) alimenta o multiplicador de `confidence_score` por
+    recência de atividade — omitido (retrocompat) não penaliza.
+    """
+    products = products or []
+    services = services or []
+    signals = signals or []
+    items = _portfolio_items(portfolio, signals)
+    categories = _categories_present(items, products, services)
+    opportunities: list[Opportunity] = []
+
+    for rule in rules:
+        if not rule.active:
+            continue
+
+        if rule.relation_type:
+            opportunities.extend(_evaluate_relation_rule(rule, portfolio, items, products, company))
+        elif rule.requires_category or rule.absent_category:
+            evidence = _evaluate_category_rule(rule, categories)
+            if evidence is not None:
+                opportunities.append(_build_opportunity(rule, portfolio, evidence=evidence, company=company))
+        else:
+            if _evaluate_simple_rule(rule, items) is not None:
+                opportunities.append(_build_opportunity(
+                    rule, portfolio, evidence=list(rule.requires), company=company,
+                ))
+
+    return opportunities
