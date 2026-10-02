@@ -1,0 +1,154 @@
+# Lead.Tracker
+
+![Lead.Tracker](assets/banner.svg)
+
+[![Release](https://img.shields.io/github/v/release/julianscunha/Lead.Tracker)](https://github.com/julianscunha/Lead.Tracker/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Tech.Forge module](https://img.shields.io/badge/Tech.Forge-module-6366f1)](https://github.com/julianscunha/Tech.Forge)
+[![Python](https://img.shields.io/badge/python-3.11-3776AB?logo=python&logoColor=white)](backend/requirements.txt)
+[![React](https://img.shields.io/badge/frontend-React%2FTypeScript-61DAFB?logo=react&logoColor=white)](frontend/package.json)
+
+## Suas melhores oportunidades de venda já estão no seu CRM — só ninguém olhou
+
+Lead.Tracker cruza o que você já sabe sobre seus clientes (CRM, website,
+portfólio técnico) com o que você vende, e aponta onde tem dinheiro na mesa:
+cliente com Veeam mas sem DR, prospect crescendo sem produto X, conta que
+vale reavaliação de preço. Tudo com evidência, nunca um palpite.
+
+Regras determinísticas fazem o trabalho pesado; IA é opcional e só entra
+pra interpretar, correlacionar e redigir — nunca decide sozinha, nunca
+inventa produto fora do seu portfólio.
+
+Módulo instalável do [Tech.Forge](https://github.com/julianscunha/Tech.Forge).
+
+## O que ele faz
+
+- **Encontra oportunidades de verdade** — cross-sell, up-sell, serviços,
+  otimização de custo e modernização, cada uma com motivo e evidência
+  (fato + implicação de negócio + fonte + data, nunca um log técnico cru).
+- **Prioriza por impacto** — score de aderência, potencial financeiro,
+  score estratégico e confiança são números separados, nunca misturados
+  num só.
+- **Quantifica o tamanho do problema** — alcance (isolado/parcial/
+  generalizado) × criticidade viram uma severidade clara, qualificada pelo
+  vendedor em segundos.
+- **Acompanha o funil de ponta a ponta** — status auditável (detectada →
+  qualificada → revisada → contatada → oportunidade, ou descartada com
+  motivo categorizado), com histórico completo de quando e por quê.
+- **Cuida da carteira, não só de leads novos** — saúde de conta e sugestão
+  de quando revisar cada cliente (baseado em renovação + saúde, nunca
+  aleatório), alerta de oportunidade parada há tempo demais.
+- **Prospecta geograficamente** — a partir do seu Google Maps, encontra
+  empresas parecidas com seus melhores clientes (ICP configurável ou
+  derivado automaticamente), com filtro anti-spam por representante/dia.
+- **Se adapta ao seu CRM** — mapeia qualquer campo personalizado do
+  Salesforce pra um papel de negócio (sem precisar saber o que é API name),
+  e avisa em português quando um mapeamento quebra.
+- **Ajuda a escrever o contato** — rascunho de e-mail persuasivo com
+  guardas contra alucinação (nunca inventa urgência, nunca cita "cliente
+  parecido" sem caso real), sugestão de próximo passo por cliente/prospect
+  (canal, motivo, cadência) — sempre uma sugestão pra você confirmar,
+  nunca um disparo automático.
+- **Mostra o panorama** — dashboard executivo com KPIs e gráficos, tudo
+  vindo de dado real.
+- **Poupa seu tempo** — exporta PDF/Excel com um clique em toda tela de
+  resultado.
+- **Funciona com ou sem IA** — o motor de oportunidades roda inteiro sem
+  nenhuma chave de API configurada; IA é só um complemento opcional que
+  nunca decide sozinha nem envia nada automaticamente.
+
+## Telas
+
+| Aba | O que você faz ali |
+|---|---|
+| **Dashboard** | Visão executiva: KPIs, funil, distribuição por fabricante/serviço, oportunidades paradas, cobertura de meta por representante. |
+| **Oportunidades** | A lista viva de tudo que o motor encontrou — filtra, ordena, qualifica severidade, muda status, gera rascunho de e-mail e vê a próxima ação sugerida por oportunidade. |
+| **Prospecção** | Assistente guiado de descoberta geográfica (Google Maps) — define raio/produto de referência e recebe uma lista de prospects pontuados. |
+| **Configurações** | Fontes de dado (Salesforce, Google Maps), importação de empresas + portfólio por CSV em lote, cadastro de fabricante/produto/serviço/regra (com remoção), mapeamento de campo personalizado, IA, metas por representante. |
+
+## Arquitetura
+
+Backend em Python/FastAPI, frontend em React/TypeScript, persistência em
+SQLite local, providers desacoplados de fonte de dado, IA plugável por
+provider, empacotado como `.mod` do Tech.Forge.
+
+## De onde vêm os dados
+
+Lead.Tracker não é preso a nenhuma fonte específica — Salesforce é só uma
+integração opcional entre várias.
+
+Hoje: Salesforce (com mapeamento de campo customizado), Google Maps
+(prospecção geográfica) e importação de empresas + portfólio por CSV em
+lote — sem CRM nenhum conectado.
+No radar: HubSpot, Pipedrive, LinkedIn e outros conectores.
+
+## Portfólio
+
+O portfólio (fabricante, produto, serviço e as regras que os conectam) é
+cadastrado direto na tela de Configurações ou importado em lote por CSV.
+Nunca é inventado por IA nem por integração nenhuma — toda oportunidade
+referencia só o que já está no seu catálogo configurado.
+
+## A tela de Oportunidades
+
+Uma planilha viva: filtre por cliente ou prospect, por produto ou serviço,
+ordene por score ou potencial financeiro, expanda qualquer empresa pra ver
+as fontes por trás do número. Copie o que precisar ou gere um rascunho de
+e-mail comercial direto dali.
+
+## Papel da IA
+
+Regras determinísticas são a base — a IA entra depois, só pra interpretar
+contexto, correlacionar sinais, enriquecer justificativa e redigir texto.
+Ela nunca decide sozinha que uma oportunidade existe, e nunca inventa
+produto ou serviço fora do portfólio configurado.
+
+## Desenvolvimento
+
+### Comandos
+
+```bash
+# Backend
+pip install -r backend/requirements.txt
+python -m pytest -q          # suíte completa
+python -m pytest tests/test_opportunity_engine.py -q   # um arquivo específico
+
+# Frontend
+cd frontend
+npm install
+npm run build   # gera frontend/index.js (build output, gitignored)
+npm run test    # vitest — lógica pura (filtros/ordenação/paleta)
+```
+
+### Testar contra o Tech.Forge Core de verdade
+
+Não faz parte do projeto (é uma dependência de desenvolvimento, gitignored):
+
+```bash
+git clone https://github.com/julianscunha/Tech.Forge .techforge-dev
+# copiar manifest.yaml, backend/, frontend/index.js, core/, providers/, exports/, ai/,
+# assets/, docs/ e tests/ para .techforge-dev/modules/installed/lead_tracker/
+cd .techforge-dev/core/backend && python run.py   # sobe o Core em :8000
+```
+
+`install()`/`enable()`/`health_check()` do módulo só são chamados de verdade
+via `POST /api/v1/marketplace/activate/{id}` e `/deactivate/{id}` — o
+endpoint `/api/v1/health` é um stub do Core que não invoca o `ModuleContract`
+diretamente, só reflete o status do registry.
+
+## Tech.Forge
+
+O Lead.Tracker é um módulo do ecossistema Tech.Forge e deve respeitar seu contrato de módulo, SDK, frontend host e empacotamento.
+
+- Core da plataforma: [`Tech.Forge`](https://github.com/julianscunha/Tech.Forge)
+- Catálogo oficial de módulos: [`Tech.Forge.Modules`](https://github.com/julianscunha/Tech.Forge.Modules)
+
+Este repositório é o desenvolvimento do módulo — a distribuição pro catálogo oficial acontece a partir do `.mod` publicado em cada [release](https://github.com/julianscunha/Lead.Tracker/releases).
+
+## Contribuindo
+
+Contribuições são bem-vindas. Veja [`CONTRIBUTING.md`](CONTRIBUTING.md) para as regras de domínio que todo PR precisa respeitar, como rodar o projeto localmente e o fluxo de contribuição.
+
+## Licença
+
+[MIT](LICENSE).
