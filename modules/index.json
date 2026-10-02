@@ -3,13 +3,13 @@
     {
       "id": "lead_tracker",
       "name": "Lead.Tracker",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "Sales",
       "vendor": "TechForge",
       "author": "TechForge Team",
       "description": "Módulo de Opportunity Intelligence: transforma dados de clientes, prospects, portfólio tecnológico, produtos e serviços em oportunidades comerciais priorizadas (cross-sell, up-sell, modernização, otimização de custos).\n",
-      "mod_url": "lead_tracker/lead_tracker-1.0.0.mod",
-      "checksum": "16f661137ba2ae68233e94d1b9bb571be6711fac4030c819363dce6bff6f317e"
+      "mod_url": "lead_tracker/lead_tracker-1.1.0.mod",
+      "checksum": "a8cc8e6578c61fc46da59fe046f11d02f3fbacdd243bdcaa3fe6ccb93c4c06be"
     },
     {
       "id": "system_health_check",
